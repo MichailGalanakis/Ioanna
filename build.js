@@ -35,6 +35,6 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
 });
 
 // Όνομα χωρίς ελληνικά/σύμβολα ώστε να ανοίγει εύκολα σε Chrome κινητού (file://)
-const out = "ioanna.html";
+const out = "ioanna-pro-max.html";
 fs.writeFileSync(path.join(root, out), html, "utf8");
 console.log("✓ Δημιουργήθηκε:", out, "(" + Math.round(Buffer.byteLength(html) / 1024) + " KB)");
