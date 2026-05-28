@@ -436,15 +436,19 @@
 
   /* ---------------- Δείγμα λέξεων ---------------- */
   function loadSample() {
+    const apply = (data) => {
+      const deck = Store.createDeck(data.name || "Δείγμα");
+      deck.words = (data.words || []).map((w) => ({ id: Store.uid(), jp: w.jp || "", reading: w.reading || "", meaning: w.meaning || "" }));
+      Store.updateDeck(deck);
+      renderHome();
+      toast("Φορτώθηκε το δείγμα: " + deck.words.length + " λέξεις");
+    };
+    // Χρησιμοποίησε ενσωματωμένα δεδομένα (δουλεύει και χωρίς server / offline)
+    if (window.SAMPLE_DECK) return apply(window.SAMPLE_DECK);
+    // Εναλλακτικά, φόρτωσε από αρχείο (όταν τρέχει μέσω http)
     fetch("data/sample-deck.json")
       .then((r) => r.json())
-      .then((data) => {
-        const deck = Store.createDeck(data.name || "Δείγμα");
-        deck.words = (data.words || []).map((w) => ({ id: Store.uid(), jp: w.jp || "", reading: w.reading || "", meaning: w.meaning || "" }));
-        Store.updateDeck(deck);
-        renderHome();
-        toast("Φορτώθηκε το δείγμα: " + deck.words.length + " λέξεις");
-      })
+      .then(apply)
       .catch(() => toast("Δεν ήταν δυνατή η φόρτωση του δείγματος"));
   }
 
@@ -549,7 +553,8 @@
     });
     window.addEventListener("appinstalled", () => $("installBtn").classList.add("hidden"));
 
-    if ("serviceWorker" in navigator) {
+    // Ο service worker (offline) δουλεύει μόνο μέσω http/https, όχι ως τοπικό αρχείο
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW:", e));
       });
