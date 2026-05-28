@@ -77,10 +77,18 @@
       del.title = "Διαγραφή";
       del.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm('Διαγραφή του σετ "' + deck.name + '";')) {
+        if (del.dataset.confirm === "1") {
           Store.deleteDeck(deck.id);
           renderHome();
           toast("Το σετ διαγράφηκε");
+        } else {
+          del.dataset.confirm = "1";
+          del.textContent = "Διαγραφή;";
+          toast('Πάτησε ξανά για διαγραφή του "' + deck.name + '"');
+          setTimeout(() => {
+            del.dataset.confirm = "0";
+            del.textContent = "🗑";
+          }, 3000);
         }
       });
       actions.appendChild(play);
@@ -489,10 +497,14 @@
     $("backBtn").addEventListener("click", goBack);
 
     $("newDeckBtn").addEventListener("click", () => {
-      const name = prompt("Όνομα νέου σετ:", "Σετ " + (Store.getDecks().length + 1));
-      if (name === null) return;
-      const deck = Store.createDeck(name.trim() || "Νέο σετ");
+      const deck = Store.createDeck("Σετ " + (Store.getDecks().length + 1));
       openEditor(deck.id);
+      // Εστίασε στο όνομα ώστε να το αλλάξει εύκολα ο χρήστης
+      setTimeout(() => {
+        const i = $("deckNameInput");
+        i.focus();
+        i.select();
+      }, 60);
     });
     $("loadSampleBtn").addEventListener("click", loadSample);
 
