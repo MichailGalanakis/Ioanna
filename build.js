@@ -34,6 +34,7 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
   return `<script>\n${code}\n</script>`;
 });
 
-const out = "Ιαπωνικές-Ασκήσεις.html";
+// Όνομα χωρίς ελληνικά/σύμβολα ώστε να ανοίγει εύκολα σε Chrome κινητού (file://)
+const out = "ioanna.html";
 fs.writeFileSync(path.join(root, out), html, "utf8");
 console.log("✓ Δημιουργήθηκε:", out, "(" + Math.round(Buffer.byteLength(html) / 1024) + " KB)");
