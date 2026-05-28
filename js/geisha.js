@@ -108,8 +108,44 @@
     }
   }
 
+  /* ---- ξεκλειδώσιμα στολίδια (από επιτεύγματα) ---- */
+  function ornaments(owned) {
+    owned = owned || [];
+    let s = "";
+    if (owned.includes("kimono_gold")) {
+      s += `<path d="M55,205 L100,182 L145,205 Z" fill="#b45309"/>` +
+           `<path d="M72,206 L100,188 L128,206 Z" fill="#fcd34d"/>`;
+    }
+    if (owned.includes("flower")) {
+      s += [0, 1, 2, 3, 4].map((i) => {
+        const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        return `<circle cx="${(138 + Math.cos(a) * 8).toFixed(1)}" cy="${(40 + Math.sin(a) * 8).toFixed(1)}" r="6" fill="#c084fc"/>`;
+      }).join("") + `<circle cx="138" cy="40" r="5" fill="#fde047"/>`;
+    }
+    if (owned.includes("crown")) {
+      s += `<polygon points="${"82,16 90,4 100,12 110,4 118,16"}" fill="#fbbf24" stroke="#b45309" stroke-width="1"/>` +
+           `<circle cx="100" cy="9" r="2.5" fill="#ef4444"/>`;
+    }
+    if (owned.includes("fan")) {
+      s += `<g transform="rotate(-18 36 184)"><path d="M36,184 L14,156 A36,36 0 0,1 58,156 Z" fill="#fca5a5" stroke="#b91c1c" stroke-width="1.5"/>` +
+           `<path d="M36,184 L22,168 M36,184 L36,150 M36,184 L50,168" stroke="#b91c1c" stroke-width="1"/></g>`;
+    }
+    if (owned.includes("umbrella")) {
+      s += `<g transform="translate(160 26)"><path d="M-20,8 A20,20 0 0,1 20,8 Z" fill="#ef4444"/>` +
+           `<path d="M-20,8 A20,20 0 0,1 20,8" fill="none" stroke="#fff" stroke-width="1.5"/>` +
+           `<line x1="0" y1="8" x2="0" y2="34" stroke="#7c3a12" stroke-width="2"/></g>`;
+    }
+    if (owned.includes("lantern")) {
+      s += `<g transform="translate(166 176)"><rect x="-12" y="-14" width="24" height="28" rx="11" fill="#dc2626"/>` +
+           `<line x1="-12" y1="-4" x2="12" y2="-4" stroke="#7f1d1d" stroke-width="1.4"/>` +
+           `<line x1="-12" y1="4" x2="12" y2="4" stroke="#7f1d1d" stroke-width="1.4"/>` +
+           `<rect x="-5" y="-20" width="10" height="6" fill="#7c2d12"/></g>`;
+    }
+    return s;
+  }
+
   /* ---- ολόκληρη η φιγούρα ---- */
-  function svg(pct) {
+  function svg(pct, owned) {
     const t = tierFor(pct);
     const k = t.key;
     return `
@@ -146,6 +182,7 @@
   ${brows(k)}
   ${eyes(k)}
   ${mouth(k)}
+  ${ornaments(owned)}
 </svg>`;
   }
 

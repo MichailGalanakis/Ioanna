@@ -1,11 +1,18 @@
 /* sw.js — Service Worker για offline λειτουργία */
-const CACHE = "jp-vocab-v1";
+const CACHE = "jp-vocab-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./css/styles.css",
+  "./js/sample-data.js",
+  "./js/packs.js",
   "./js/storage.js",
+  "./js/srs.js",
+  "./js/stats.js",
+  "./js/achievements.js",
+  "./js/speech.js",
   "./js/exercises.js",
+  "./js/geisha.js",
   "./js/app.js",
   "./manifest.webmanifest",
   "./data/sample-deck.json",
