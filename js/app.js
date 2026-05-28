@@ -422,6 +422,14 @@
     document.querySelector(".score-circle").style.setProperty("--p", pct + "%");
     $("scoreText").textContent = right + " σωστά από " + total;
 
+    // Γκέισα με έκφραση ανάλογη του σκορ + σχόλιο
+    if (window.Geisha) {
+      $("geishaArt").innerHTML = window.Geisha.svg(pct);
+      const msg = window.Geisha.message(pct);
+      $("perfJp").textContent = msg.jp;
+      $("perfGr").textContent = msg.gr;
+    }
+
     const rl = $("reviewList");
     rl.innerHTML = "";
     s.results.forEach((r) => {

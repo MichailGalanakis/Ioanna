@@ -203,6 +203,18 @@ label.check input { width: 20px; height: 20px; accent-color: var(--accent); }
 @keyframes shake { 0%,100%{transform:none} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
 
 /* Results */
+.geisha-art {
+  width: 200px;
+  height: 200px;
+  max-width: 64vw;
+  margin: 8px auto 4px;
+  animation: pop .45s cubic-bezier(.18,.89,.32,1.28);
+}
+@keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.perf-msg { text-align: center; margin-bottom: 8px; }
+.perf-jp { font-size: 30px; font-weight: 800; color: var(--accent-2); line-height: 1.1; }
+.perf-gr { font-size: 17px; color: var(--text); margin-top: 4px; }
+
 .score-circle {
   width: 140px; height: 140px;
   margin: 16px auto;
