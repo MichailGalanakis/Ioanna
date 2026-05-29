@@ -21,16 +21,21 @@
   </header>
 
   <main id="app">
-    <!-- ========================= ΑΡΧΙΚΗ / ΛΙΣΤΑ ΣΕΤ ========================= -->
+    <!-- ========================= ΑΡΧΙΚΗ ========================= -->
     <section id="view-home" class="view active">
+      <div class="home-actions">
+        <button id="statsBtn" class="ghost-btn">📊 Στατιστικά</button>
+        <button id="packsBtn" class="ghost-btn">📦 Έτοιμα πακέτα</button>
+      </div>
+      <div id="streakChip" class="streak-chip hidden"></div>
       <div class="section-head">
         <h2>Τα σετ λέξεών μου</h2>
         <button id="newDeckBtn" class="primary-btn">+ Νέο σετ</button>
       </div>
       <div id="deckList" class="deck-list"></div>
       <p id="emptyHint" class="muted hidden">
-        Δεν έχεις σετ ακόμα. Πάτησε <strong>«+ Νέο σετ»</strong> για να ξεκινήσεις,
-        ή φόρτωσε το δείγμα παρακάτω.
+        Δεν έχεις σετ ακόμα. Πάτησε <strong>«+ Νέο σετ»</strong>, φόρτωσε το δείγμα,
+        ή διάλεξε ένα <strong>έτοιμο πακέτο</strong>.
       </p>
       <button id="loadSampleBtn" class="ghost-btn full">Φόρτωσε δείγμα λέξεων</button>
     </section>
@@ -45,8 +50,11 @@
         <h3>Πρόσθεσε λέξη</h3>
         <div class="word-fields">
           <input id="fJp" placeholder="Ιαπωνικά (π.χ. 水)" lang="ja" />
-          <input id="fReading" placeholder="Ανάγνωση (π.χ. みず / mizu)" lang="ja" />
+          <input id="fReading" placeholder="Ανάγνωση (π.χ. みず)" lang="ja" />
+          <input id="fRomaji" placeholder="Ρομάτζι (προαιρετικό, π.χ. mizu)" />
           <input id="fMeaning" placeholder="Σημασία (π.χ. νερό)" />
+          <input id="fExample" placeholder="Παράδειγμα πρότασης (προαιρετικό)" lang="ja" />
+          <input id="fTags" placeholder="Κατηγορίες, χωρισμένες με κόμμα (π.χ. φαγητό, ρήμα)" />
         </div>
         <button id="addWordBtn" class="primary-btn full">Προσθήκη λέξης</button>
       </div>
@@ -54,11 +62,11 @@
       <details class="card bulk">
         <summary>Μαζική εισαγωγή / Εξαγωγή</summary>
         <p class="muted small">
-          Μία λέξη ανά γραμμή, με τη μορφή:
-          <code>Ιαπωνικά ; ανάγνωση ; σημασία</code>
-          (μπορείς να χρησιμοποιήσεις <code>;</code>, <code>,</code> ή Tab ως διαχωριστικό).
+          Μία λέξη ανά γραμμή:
+          <code>Ιαπωνικά ; ανάγνωση ; σημασία ; ρομάτζι ; παράδειγμα ; κατηγορίες</code>
+          (μόνο τα τρία πρώτα είναι υποχρεωτικά).
         </p>
-        <textarea id="bulkArea" rows="6" placeholder="水 ; みず ; νερό&#10;犬 ; いぬ ; σκύλος&#10;食べる ; たべる ; τρώω"></textarea>
+        <textarea id="bulkArea" rows="6" placeholder="水 ; みず ; νερό ; mizu&#10;犬 ; いぬ ; σκύλος ; inu&#10;食べる ; たべる ; τρώω ; taberu ;  ; ρήμα"></textarea>
         <div class="row-btns">
           <button id="bulkImportBtn" class="primary-btn">Εισαγωγή από κείμενο</button>
           <button id="exportJsonBtn" class="ghost-btn">Εξαγωγή (JSON)</button>
@@ -74,6 +82,32 @@
       <div id="wordList" class="word-list"></div>
     </section>
 
+    <!-- ========================= ΕΤΟΙΜΑ ΠΑΚΕΤΑ ========================= -->
+    <section id="view-packs" class="view">
+      <h2>Έτοιμα πακέτα</h2>
+      <p class="muted small">Πρόσθεσέ τα σαν νέο σετ και ξεκίνα αμέσως.</p>
+      <div id="packList" class="deck-list"></div>
+    </section>
+
+    <!-- ========================= ΣΤΑΤΙΣΤΙΚΑ ========================= -->
+    <section id="view-stats" class="view">
+      <h2>Στατιστικά</h2>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="stat-num" id="stStreak">0</div><div class="stat-lbl">🔥 σερί (μέρες)</div></div>
+        <div class="stat-card"><div class="stat-num" id="stBest">0</div><div class="stat-lbl">καλύτερο σερί</div></div>
+        <div class="stat-card"><div class="stat-num" id="stAvg">0%</div><div class="stat-lbl">μέσος όρος</div></div>
+        <div class="stat-card"><div class="stat-num" id="stAns">0</div><div class="stat-lbl">απαντήσεις</div></div>
+      </div>
+
+      <h3>Επιτεύγματα</h3>
+      <div id="achvGrid" class="achv-grid"></div>
+
+      <h3>Ιστορικό τεστ</h3>
+      <div id="historyList" class="history-list"></div>
+
+      <button id="resetStatsBtn" class="ghost-btn full">Μηδενισμός στατιστικών</button>
+    </section>
+
     <!-- ========================= ΡΥΘΜΙΣΕΙΣ ΕΞΑΣΚΗΣΗΣ ========================= -->
     <section id="view-setup" class="view">
       <h2 id="setupDeckName">Εξάσκηση</h2>
@@ -82,7 +116,9 @@
         <h3>Τύποι ασκήσεων</h3>
         <label class="check"><input type="checkbox" id="typeMc" checked /> Πολλαπλής επιλογής</label>
         <label class="check"><input type="checkbox" id="typeMatch" checked /> Αντιστοίχιση</label>
-        <label class="check"><input type="checkbox" id="typeFill" checked /> Συμπλήρωση κενού (πληκτρολόγηση)</label>
+        <label class="check"><input type="checkbox" id="typeFill" checked /> Συμπλήρωση κενού</label>
+        <label class="check"><input type="checkbox" id="typeListen" /> Ακρόαση (🔊 → σημασία)</label>
+        <label class="check"><input type="checkbox" id="typeWrite" /> Γραφή χαρακτήρα (με το δάχτυλο)</label>
       </div>
 
       <div class="card">
@@ -94,15 +130,35 @@
       </div>
 
       <div class="card">
+        <h3>Πηγή λέξεων</h3>
+        <label class="check"><input type="radio" name="src" value="all" checked /> Όλες οι λέξεις</label>
+        <label class="check"><input type="radio" name="src" value="due" /> Μόνο για επανάληψη τώρα (έξυπνη επανάληψη)</label>
+        <label class="check"><input type="radio" name="src" value="mistakes" /> Μόνο τα λάθη μου</label>
+        <div id="catWrap" class="hidden">
+          <label class="field-lbl">Κατηγορία</label>
+          <select id="catSelect"></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Επιλογές</h3>
+        <label class="check"><input type="checkbox" id="optBlitz" /> ⏱️ Λειτουργία μπλιц (60'' με πόντους)</label>
+        <label class="check"><input type="checkbox" id="optRomaji" /> Εμφάνιση ρομάτζι ως βοήθεια</label>
+        <label class="check"><input type="checkbox" id="optSpeak" checked /> 🔊 Αυτόματη προφορά</label>
+      </div>
+
+      <div class="card">
         <h3>Πλήθος ερωτήσεων</h3>
         <input id="qCount" type="number" min="1" max="100" value="10" />
       </div>
 
+      <p id="setupHint" class="muted small center"></p>
       <button id="startPracticeBtn" class="primary-btn full big">Έναρξη ▶</button>
     </section>
 
     <!-- ========================= ΕΞΑΣΚΗΣΗ ========================= -->
     <section id="view-practice" class="view">
+      <div id="blitzBar" class="blitz-bar hidden"></div>
       <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
       <p class="muted small" id="progressText"></p>
       <div id="exerciseHost"></div>
@@ -111,8 +167,14 @@
     <!-- ========================= ΑΠΟΤΕΛΕΣΜΑΤΑ ========================= -->
     <section id="view-results" class="view">
       <h2>Αποτελέσματα</h2>
+      <div id="geishaArt" class="geisha-art"></div>
+      <div id="perfMsg" class="perf-msg">
+        <div id="perfJp" class="perf-jp" lang="ja"></div>
+        <div id="perfGr" class="perf-gr"></div>
+      </div>
       <div class="score-circle"><span id="scorePct">0%</span></div>
       <p id="scoreText" class="center"></p>
+      <div id="newAchievements" class="achv-row"></div>
       <div id="reviewList" class="review-list"></div>
       <div class="row-btns center">
         <button id="againBtn" class="primary-btn">Ξανά</button>
@@ -123,8 +185,15 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="js/sample-data.js"></script>
+  <script src="js/packs.js"></script>
   <script src="js/storage.js"></script>
+  <script src="js/srs.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/achievements.js"></script>
+  <script src="js/speech.js"></script>
   <script src="js/exercises.js"></script>
+  <script src="js/geisha.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

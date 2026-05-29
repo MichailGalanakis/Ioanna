@@ -106,6 +106,48 @@
     };
   }
 
+  /* ---------- Ακρόαση (άκου & διάλεξε σημασία) ---------- */
+  function buildListen(word, allWords) {
+    if (!has(word, "meaning")) return null;
+    if (!has(word, "jp") && !has(word, "reading")) return null;
+    const correct = word.meaning.trim();
+    const distractors = [];
+    const seen = new Set([normalize(correct)]);
+    shuffle(allWords).forEach((w) => {
+      if (distractors.length >= 3 || w.id === word.id || !has(w, "meaning")) return;
+      const val = w.meaning.trim();
+      if (seen.has(normalize(val))) return;
+      seen.add(normalize(val));
+      distractors.push(val);
+    });
+    if (distractors.length === 0) return null;
+    return {
+      type: "listen",
+      word,
+      speak: word.reading || word.jp,
+      promptLabel: "Άκουσε",
+      answerLabel: FIELD_LABEL.meaning,
+      options: shuffle(distractors.concat([correct])),
+      answer: correct,
+    };
+  }
+
+  /* ---------- Γραφή (σχεδίασε τον χαρακτήρα, αυτο-βαθμολόγηση) ---------- */
+  function buildWrite(word) {
+    if (!has(word, "jp")) return null;
+    const promptField = has(word, "meaning") ? "meaning" : has(word, "reading") ? "reading" : null;
+    if (!promptField) return null;
+    return {
+      type: "write",
+      word,
+      promptLabel: FIELD_LABEL[promptField],
+      prompt: word[promptField].trim(),
+      answerLabel: FIELD_LABEL.jp,
+      target: word.jp.trim(),
+      reading: word.reading || "",
+    };
+  }
+
   /* ---------- Αντιστοίχιση ---------- */
   function buildMatch(allWords, direction) {
     const dir =
@@ -133,6 +175,8 @@
     if (opts.types.mc) enabled.push("mc");
     if (opts.types.match && words.length >= 3) enabled.push("match");
     if (opts.types.fill) enabled.push("fill");
+    if (opts.types.listen) enabled.push("listen");
+    if (opts.types.write) enabled.push("write");
     if (enabled.length === 0) enabled.push("mc");
 
     const count = Math.max(1, opts.count | 0);
@@ -147,7 +191,10 @@
         ex = buildMatch(words, opts.direction);
       } else {
         const word = words[Math.floor(Math.random() * words.length)];
-        ex = type === "mc" ? buildMc(word, words, opts.direction) : buildFill(word, opts.direction);
+        if (type === "mc") ex = buildMc(word, words, opts.direction);
+        else if (type === "fill") ex = buildFill(word, opts.direction);
+        else if (type === "listen") ex = buildListen(word, words);
+        else if (type === "write") ex = buildWrite(word);
       }
       if (ex) exercises.push(ex);
     }
