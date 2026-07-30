@@ -64,6 +64,14 @@ class CycleResult:
     contribution: Contribution | None
     plan: RebalancePlan
     intents: tuple[OrderIntent, ...]
+    cash_carried: Decimal = Decimal(0)
+    """Contribution money that could not be spent this cycle.
+
+    Whole-share instruments almost never absorb a round contribution exactly:
+    €500 into a €137 fund buys three shares and leaves €89. That remainder has
+    to be carried into the next cycle rather than dropped, or the portfolio
+    quietly runs below the intended contribution rate forever.
+    """
 
     @property
     def approved(self) -> tuple[OrderIntent, ...]:
@@ -97,6 +105,7 @@ class PassiveCore:
         rebalancer: Rebalancer | None = None,
         venue: str = "ibkr",
         pillar: str = "core",
+        lot_sizes: Mapping[str, Decimal] | None = None,
     ) -> None:
         self.allocation = allocation
         self.schedule = schedule
@@ -106,6 +115,21 @@ class PassiveCore:
         self.rebalancer = rebalancer or Rebalancer(allocation)
         self.venue = venue
         self.pillar = pillar
+        # Smallest tradeable increment per instrument. Absent means fractional
+        # trading is available and any quantity is acceptable.
+        self.lot_sizes = dict(lot_sizes or {})
+
+    def _round_to_lot(self, instrument: str, quantity: Decimal) -> Decimal:
+        """Round down to a tradeable quantity.
+
+        Always down, never to nearest: rounding a buy up spends money that has
+        not been contributed, and rounding a sell up disposes of shares that
+        may not be held.
+        """
+        lot = self.lot_sizes.get(instrument)
+        if lot is None or lot <= 0:
+            return quantity
+        return (quantity // lot) * lot
 
     # -- one cycle ----------------------------------------------------------
 
@@ -119,6 +143,7 @@ class PassiveCore:
         peak_equity: Decimal | None = None,
         liquidity: Mapping[str, Decimal] | None = None,
         allow_sales: bool = True,
+        carried_cash: Decimal = Decimal(0),
     ) -> CycleResult:
         """Plan, review and journal. Does not send anything.
 
@@ -142,7 +167,13 @@ class PassiveCore:
         contribution = next_contribution(
             self.schedule, last_contribution, ts.date()
         )
-        cash = contribution.amount if contribution else Decimal(0)
+        if carried_cash < 0:
+            raise ValueError("carried cash must be non-negative")
+
+        # Last cycle's unspent remainder is available this cycle. Without
+        # this the portfolio drifts below the intended contribution rate by
+        # whatever a share price does not divide into.
+        cash = (contribution.amount if contribution else Decimal(0)) + carried_cash
 
         if not holdings and cash == 0:
             raise ValueError("no holdings and no contribution due")
@@ -161,6 +192,7 @@ class PassiveCore:
         trades = trades_today
 
         intents = []
+        spent = Decimal(0)
         for action in plan.actions:
             state = PortfolioState(
                 equity=equity,
@@ -172,28 +204,38 @@ class PassiveCore:
             intent = self._review_and_journal(
                 action, plan, prices, state, liquidity, ts
             )
+            if intent is None:
+                # Rounded down to nothing -- the order was smaller than one
+                # tradeable lot. Its value stays in cash and carries forward.
+                continue
+
             intents.append(intent)
 
             if not intent.approved:
                 continue
 
-            delta = (
-                action.value
-                if action.kind is ActionKind.BUY
-                else -action.value
-            )
+            # The order may have been rounded down to a whole lot, so track
+            # what it actually costs rather than what the plan asked for.
+            filled = intent.order.quantity * prices[action.instrument]
+            delta = filled if action.kind is ActionKind.BUY else -filled
+
             positions[action.instrument] = max(
                 Decimal(0), positions.get(action.instrument, Decimal(0)) + delta
             )
             pillar_total = max(Decimal(0), pillar_total + delta)
             if not intent.order.reduce_only:
                 trades += 1
+            spent += delta
 
         return CycleResult(
             ran_at=ts,
             contribution=contribution,
             plan=plan,
             intents=tuple(intents),
+            # Whatever the lot sizes would not absorb. Floored at zero: a
+            # cycle that raised cash by selling is not carrying a contribution
+            # forward, it is holding proceeds the next cycle will redeploy.
+            cash_carried=max(Decimal(0), cash - spent),
         )
 
     def _review_and_journal(
@@ -204,16 +246,21 @@ class PassiveCore:
         state: PortfolioState,
         liquidity: Mapping[str, Decimal] | None,
         ts: datetime,
-    ) -> OrderIntent:
+    ) -> OrderIntent | None:
+        """Size, review and record one order. None if it rounds to nothing."""
         price = prices.get(action.instrument)
         if price is None or price <= 0:
             raise ValueError(f"no usable price for {action.instrument!r}")
+
+        quantity = self._round_to_lot(action.instrument, action.value / price)
+        if quantity <= 0:
+            return None
 
         order = OrderRequest(
             instrument=action.instrument,
             venue=self.venue,
             side=Side.BUY if action.kind is ActionKind.BUY else Side.SELL,
-            quantity=action.value / price,
+            quantity=quantity,
             reference_price=price,
             strategy_pillar=self.pillar,
             # Sells in the core are position reductions, which keeps them

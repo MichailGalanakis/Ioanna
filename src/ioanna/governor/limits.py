@@ -20,6 +20,11 @@ class Limits:
     # Fraction of equity each pillar may represent. Missing pillar => refused,
     # so a new strategy cannot start trading just because someone typed a new
     # name into a config file.
+    #
+    # Zero is allowed and means something different from absent: the pillar is
+    # known and deliberately unfunded, which is the correct state for a
+    # strategy that has not yet cleared its gates. Reduce-only orders still
+    # pass, so a pillar can always be wound down after its budget is cut.
     max_pillar_fraction: dict[str, Decimal] = field(
         default_factory=lambda: {
             "core": Decimal("0.70"),
@@ -55,8 +60,8 @@ class Limits:
         if self.min_liquidity_multiple < 0:
             raise ValueError("min_liquidity_multiple must be non-negative")
         for pillar, frac in self.max_pillar_fraction.items():
-            if not (Decimal(0) < frac <= Decimal(1)):
-                raise ValueError(f"pillar fraction for {pillar!r} must be in (0, 1]")
+            if not (Decimal(0) <= frac <= Decimal(1)):
+                raise ValueError(f"pillar fraction for {pillar!r} must be in [0, 1]")
 
 
 #: The allocation from research/04-architecture.md, with the venue and

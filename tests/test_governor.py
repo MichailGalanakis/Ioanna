@@ -393,8 +393,89 @@ def test_review_does_not_mutate_its_inputs(governor: Governor) -> None:
         {"max_trades_per_day": -1},
         {"min_liquidity_multiple": Decimal("-1")},
         {"max_pillar_fraction": {"core": Decimal("1.5")}},
+        {"max_pillar_fraction": {"core": Decimal("-0.1")}},
     ],
 )
 def test_nonsensical_limits_are_rejected_at_construction(kwargs) -> None:
     with pytest.raises(ValueError):
         Limits(**kwargs)
+
+
+# -- unfunded pillars -------------------------------------------------------
+
+
+def test_a_zero_budget_pillar_cannot_open_positions() -> None:
+    """Zero is not absent: the pillar is known and deliberately unfunded,
+    which is the correct state before a strategy has cleared its gates."""
+    limits = Limits(
+        max_pillar_fraction={"core": Decimal("1.0"), "satellite": Decimal("0")},
+        allowed_venues=frozenset({VENUE}),
+        allowed_instruments=frozenset({INSTRUMENT}),
+        min_liquidity_multiple=Decimal("0"),
+    )
+    governor = Governor(limits)
+    decision = governor.review(
+        make_order(strategy_pillar="satellite"), make_state()
+    )
+    assert not decision.approved
+    assert Rejection.PILLAR_EXPOSURE_EXCEEDED in decision.reasons
+
+
+def test_an_unfunded_pillar_can_still_be_wound_down() -> None:
+    """Cutting a pillar's budget to zero must not trap its open positions."""
+    limits = Limits(
+        max_pillar_fraction={"core": Decimal("1.0"), "satellite": Decimal("0")},
+        allowed_venues=frozenset({VENUE}),
+        allowed_instruments=frozenset({INSTRUMENT}),
+        min_liquidity_multiple=Decimal("0"),
+    )
+    governor = Governor(limits)
+    state = make_state(
+        positions={INSTRUMENT: Decimal("5000")},
+        pillar_exposure={"satellite": Decimal("5000")},
+    )
+    decision = governor.review(
+        make_order(strategy_pillar="satellite", reduce_only=True), state
+    )
+    assert decision.approved, decision.violations
+
+
+def test_zero_budget_is_distinct_from_an_unknown_pillar() -> None:
+    """The rejection reason should say which of the two it was."""
+    limits = Limits(
+        max_pillar_fraction={"core": Decimal("1.0"), "satellite": Decimal("0")},
+        allowed_venues=frozenset({VENUE}),
+        allowed_instruments=frozenset({INSTRUMENT}),
+        min_liquidity_multiple=Decimal("0"),
+    )
+    governor = Governor(limits)
+    unfunded = governor.review(
+        make_order(strategy_pillar="satellite"), make_state()
+    )
+    unknown = governor.review(
+        make_order(strategy_pillar="typo"), make_state()
+    )
+    assert Rejection.PILLAR_EXPOSURE_EXCEEDED in unfunded.reasons
+    assert Rejection.PILLAR_NOT_ALLOWED in unknown.reasons
+
+
+def test_an_oversized_position_can_always_be_reduced(governor: Governor) -> None:
+    """Tightening a limit must not trap the positions it was meant to remove.
+
+    A 10,000 position against a 5,000 cap is already in breach. The order that
+    shrinks it to 9,000 is still over the cap, but refusing it would leave the
+    only remedy as editing the limits -- at exactly the moment nobody should
+    be editing limits.
+    """
+    state = make_state(positions={INSTRUMENT: Decimal("10000")})
+    decision = governor.review(make_order(reduce_only=True), state)
+    assert decision.approved, decision.violations
+
+
+def test_reducing_does_not_excuse_an_increase(governor: Governor) -> None:
+    """The exemption is for orders that shrink exposure, not for any order
+    that happens to be flagged reduce-only while growing the book."""
+    state = make_state(positions={INSTRUMENT: Decimal("10000")})
+    decision = governor.review(make_order(reduce_only=False), state)
+    assert not decision.approved
+    assert Rejection.POSITION_TOO_LARGE in decision.reasons

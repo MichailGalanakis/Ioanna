@@ -150,7 +150,7 @@ class Governor:
         projected = self._project(current, order)
         cap = state.equity * self._limits.max_position_fraction
 
-        if projected > cap:
+        if projected > cap and not self._improves(current, projected):
             return [
                 Violation(
                     Rejection.POSITION_TOO_LARGE,
@@ -172,7 +172,7 @@ class Governor:
         projected = self._project(current, order)
         cap = state.equity * limit
 
-        if projected > cap:
+        if projected > cap and not self._improves(current, projected):
             return [
                 Violation(
                     Rejection.PILLAR_EXPOSURE_EXCEEDED,
@@ -221,6 +221,19 @@ class Governor:
         return []
 
     # -- helpers ------------------------------------------------------------
+
+    @staticmethod
+    def _improves(current: Decimal, projected: Decimal) -> bool:
+        """Whether the order moves exposure down.
+
+        An exposure limit must never block an order that reduces exposure,
+        even when the result is still over the cap. Otherwise tightening a
+        limit -- or cutting a pillar's budget to zero after it fails a gate --
+        traps the very positions the new limit was meant to remove, and the
+        only way out is to edit the limits back, at exactly the moment nobody
+        should be editing limits.
+        """
+        return projected < current
 
     @staticmethod
     def _project(current: Decimal, order: OrderRequest) -> Decimal:

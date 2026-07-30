@@ -412,3 +412,181 @@ def test_a_year_of_contributions_realises_no_gains(core) -> None:
 
     assert core.ledger.realized_gain(2026) == D("0")
     assert core.ledger.tax_summary(2026)["estimated_tax"] == D("0")
+
+
+# ===========================================================================
+# Whole shares and cash carry-over
+# ===========================================================================
+
+
+@pytest.fixture
+def whole_share_core():
+    """A single-fund core in an instrument that trades in whole shares.
+
+    IBKR requires $5m average daily volume and $5bn market cap before
+    fractional trading is enabled on European ETFs, and many UCITS funds do
+    not clear it. Whole shares are the assumption until a venue says
+    otherwise.
+    """
+    allocation = TargetAllocation({"VWCE": D("1")})
+    limits = Limits(
+        max_position_fraction=D("1.0"),
+        max_pillar_fraction={"core": D("1.0")},
+        max_trades_per_day=2,
+        max_drawdown=D("0.35"),
+        min_liquidity_multiple=D("10"),
+        allowed_venues=frozenset({"ibkr"}),
+        allowed_instruments=frozenset({"VWCE"}),
+    )
+    with Journal() as journal, TaxLedger() as ledger:
+        yield PassiveCore(
+            allocation=allocation,
+            schedule=ContributionSchedule(amount=D("500"), day_of_month=1),
+            governor=Governor(limits),
+            journal=journal,
+            ledger=ledger,
+            rebalancer=Rebalancer(allocation, RebalanceBands(), min_order=D("100")),
+            lot_sizes={"VWCE": D("1")},
+        )
+
+
+def test_order_is_rounded_down_to_whole_shares(whole_share_core) -> None:
+    """€500 into a €137 fund is 3 shares, not 3.649."""
+    result = whole_share_core.run_cycle(
+        prices={"VWCE": D("137")},
+        quantities={"VWCE": D("10")},
+        last_contribution=date(2026, 1, 1),
+        now=utc(2026, 2, 1),
+        liquidity={"VWCE": D("100000000")},
+    )
+    assert len(result.approved) == 1
+    assert result.approved[0].order.quantity == D("3")
+
+
+def test_rounding_is_never_up(whole_share_core) -> None:
+    """Rounding a buy up spends money that was not contributed."""
+    result = whole_share_core.run_cycle(
+        prices={"VWCE": D("137")},
+        quantities={"VWCE": D("10")},
+        last_contribution=date(2026, 1, 1),
+        now=utc(2026, 2, 1),
+        liquidity={"VWCE": D("100000000")},
+    )
+    spent = result.approved[0].order.quantity * D("137")
+    assert spent <= D("500")
+
+
+def test_the_remainder_is_carried_not_dropped(whole_share_core) -> None:
+    """3 shares at 137 is 411, leaving 89 to carry."""
+    result = whole_share_core.run_cycle(
+        prices={"VWCE": D("137")},
+        quantities={"VWCE": D("10")},
+        last_contribution=date(2026, 1, 1),
+        now=utc(2026, 2, 1),
+        liquidity={"VWCE": D("100000000")},
+    )
+    assert result.cash_carried == D("89")
+
+
+def test_carried_cash_is_spendable_next_cycle(whole_share_core) -> None:
+    """500 + 89 carried = 589, which buys 4 shares at 137 rather than 3."""
+    result = whole_share_core.run_cycle(
+        prices={"VWCE": D("137")},
+        quantities={"VWCE": D("13")},
+        last_contribution=date(2026, 2, 1),
+        now=utc(2026, 3, 1),
+        liquidity={"VWCE": D("100000000")},
+        carried_cash=D("89"),
+    )
+    assert result.approved[0].order.quantity == D("4")
+
+
+def test_an_order_below_one_lot_produces_nothing(whole_share_core) -> None:
+    """A contribution smaller than a single share cannot be executed."""
+    core = whole_share_core
+    core.schedule = ContributionSchedule(amount=D("120"), day_of_month=1)
+    result = core.run_cycle(
+        prices={"VWCE": D("137")},
+        quantities={"VWCE": D("10")},
+        last_contribution=date(2026, 1, 1),
+        now=utc(2026, 2, 1),
+        liquidity={"VWCE": D("100000000")},
+    )
+    assert not result.intents
+    assert result.cash_carried == D("120")
+
+
+def test_carry_accumulates_until_it_buys_a_share(whole_share_core) -> None:
+    """Two cycles of 120 cannot buy a 137 share; three can."""
+    core = whole_share_core
+    core.schedule = ContributionSchedule(amount=D("120"), day_of_month=1)
+
+    carried = D("0")
+    bought = D("0")
+    for month in range(2, 6):
+        result = core.run_cycle(
+            prices={"VWCE": D("137")},
+            quantities={"VWCE": D("10") + bought},
+            last_contribution=date(2026, month - 1, 1),
+            now=utc(2026, month, 1),
+            liquidity={"VWCE": D("100000000")},
+            carried_cash=carried,
+        )
+        carried = result.cash_carried
+        for intent in result.approved:
+            bought += intent.order.quantity
+
+    # Four contributions of 120 = 480, which buys three shares at 137 (411).
+    assert bought == D("3")
+    assert carried == D("69")
+
+
+def test_no_contribution_is_lost_over_a_year(whole_share_core) -> None:
+    """Everything contributed is either invested or still carried."""
+    core = whole_share_core
+    price = D("137")
+    carried = D("0")
+    held = D("10")
+    contributed = D("0")
+
+    for month in range(1, 13):
+        result = core.run_cycle(
+            prices={"VWCE": price},
+            quantities={"VWCE": held},
+            last_contribution=date(2025 if month == 1 else 2026,
+                                   12 if month == 1 else month - 1, 1),
+            now=utc(2026, month, 1),
+            liquidity={"VWCE": D("100000000")},
+            carried_cash=carried,
+        )
+        if result.contribution:
+            contributed += result.contribution.amount
+        carried = result.cash_carried
+        for intent in result.approved:
+            held += intent.order.quantity
+
+    invested = (held - D("10")) * price
+    assert invested + carried == contributed
+
+
+def test_fractional_instruments_are_not_rounded(core) -> None:
+    """With no lot size configured, fractional quantities pass through."""
+    result = core.run_cycle(
+        prices=PRICES,
+        quantities={IWDA: D("80"), EIMI: D("40")},
+        last_contribution=date(2026, 1, 1),
+        now=utc(2026, 2, 1),
+        liquidity=DEEP,
+    )
+    assert result.cash_carried == D("0")
+
+
+def test_negative_carried_cash_is_refused(whole_share_core) -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        whole_share_core.run_cycle(
+            prices={"VWCE": D("137")},
+            quantities={"VWCE": D("10")},
+            last_contribution=date(2026, 1, 1),
+            now=utc(2026, 2, 1),
+            carried_cash=D("-1"),
+        )
